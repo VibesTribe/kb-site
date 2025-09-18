@@ -1,0 +1,14 @@
+[
+  {
+    "id": "vf_loop_guard_001",
+    "project": "Vibeflow",
+    "type": "lesson",
+    "title": "Agent Loop Prevention",
+    "summary": "Prevents recursive agent task failures in GitHub trigger chains.",
+    "tags": ["agent", "loop", "safety"],
+    "date": "2025-09-17",
+    "links": [
+      "https://github.com/VibesTribe/knowledgebase/blob/main/agents/loop-guard.md"
+    ]
+  }
+]

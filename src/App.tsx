@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 type KBItem = {
-  id: string;
-  project: string;
+  id: string | number;
   title: string;
-  summary?: string;
+  link?: string;
+  summary?: string | null;
   tags?: string[];
-  date?: string;
-  links?: string[];
+  created?: string;
+  collection?: string;
 };
 
 const KB_URL =
@@ -27,22 +27,12 @@ export default function App() {
         const res = await fetch(KB_URL, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-
-        // Handle both formats: array OR { bookmarks: [...] }
+        // normalize shape {bookmarks:[...]}
         const arr: KBItem[] = Array.isArray(data)
           ? data
-          : Array.isArray(data.bookmarks)
-          ? data.bookmarks.map((b: any) => ({
-              id: String(b.id),
-              project: b.collection || "General",
-              title: b.title,
-              summary: b.summary || "",
-              tags: b.tags || [],
-              date: b.created ? b.created.slice(0, 10) : "",
-              links: b.link ? [b.link] : [],
-            }))
+          : Array.isArray(data?.bookmarks)
+          ? data.bookmarks
           : [];
-
         if (!canceled) setItems(arr);
       } catch (e: any) {
         if (!canceled) setErr(e?.message ?? "Failed to load knowledgebase");
@@ -55,15 +45,15 @@ export default function App() {
 
   const projects = useMemo(
     () =>
-      ["All", ...Array.from(new Set(items.map((i) => i.project)))].sort((a, b) =>
-        a.localeCompare(b)
+      ["All", ...Array.from(new Set(items.map((i) => i.collection ?? "Misc")))].sort(
+        (a, b) => a.localeCompare(b)
       ),
     [items]
   );
 
   const filtered = useMemo(() => {
     let out = items;
-    if (project !== "All") out = out.filter((i) => i.project === project);
+    if (project !== "All") out = out.filter((i) => (i.collection ?? "Misc") === project);
     const q = query.trim().toLowerCase();
     if (q) {
       out = out.filter(
@@ -75,7 +65,7 @@ export default function App() {
     }
     return out
       .slice()
-      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+      .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""));
   }, [items, project, query]);
 
   return (
@@ -90,9 +80,7 @@ export default function App() {
             {err ? (
               <span className="text-red-600">Error: {err}</span>
             ) : (
-              <>
-                Loaded <b>{items.length}</b> items.
-              </>
+              <>Loaded <b>{items.length}</b> items.</>
             )}
           </p>
         </div>
@@ -127,4 +115,40 @@ export default function App() {
               {item.summary && (
                 <p className="text-sm text-gray-700 mb-2">{item.summary}</p>
               )}
-              <div className="text-xs text-gray-500 mb-1"
+              <div className="text-xs text-gray-500 mb-1">
+                📁 {item.collection ?? "Misc"}
+                {item.created ? <> • 🗓 {item.created}</> : null}
+              </div>
+              {!!(item.tags?.length) && (
+                <div className="flex flex-wrap gap-1 mb-1">
+                  {item.tags!.map((tag) => (
+                    <span
+                      key={tag}
+                      className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {item.link && (
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline text-sm"
+                >
+                  View Source ↗
+                </a>
+              )}
+            </article>
+          ))}
+        </section>
+      )}
+
+      {items.length > 0 && filtered.length === 0 && (
+        <p className="text-gray-600">No matches for your filters.</p>
+      )}
+    </main>
+  );
+}

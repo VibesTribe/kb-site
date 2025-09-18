@@ -10,7 +10,6 @@ type KBItem = {
   links?: string[];
 };
 
-// Single source of truth: live JSON from the knowledgebase repo via jsDelivr (CORS-safe)
 const KB_URL = 'https://cdn.jsdelivr.net/gh/VibesTribe/knowledgebase@main/knowledge.json';
 
 export default function App() {
@@ -18,27 +17,32 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [project, setProject] = useState('All');
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let canceled = false;
     (async () => {
       try {
-        setErr(null);
+        setLoading(true);
         const res = await fetch(KB_URL, { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        // Handle either an array, or {items:[...]} shape
         const arr: KBItem[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-        if (!canceled) setItems(arr);
+        if (!canceled) {
+          setItems(arr);
+          setErr(null);
+        }
       } catch (e: any) {
         if (!canceled) setErr(e?.message ?? 'Failed to load knowledgebase');
+      } finally {
+        if (!canceled) setLoading(false);
       }
     })();
     return () => { canceled = true; };
   }, []);
 
   const projects = useMemo(
-    () => ['All', ...Array.from(new Set(items.map(i => i.project)))].sort((a,b)=>a.localeCompare(b)),
+    () => ['All', ...Array.from(new Set(items.map(i => i.project)))].sort(),
     [items]
   );
 
@@ -61,11 +65,11 @@ export default function App() {
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-3xl font-bold">
-            🧠 VibesTribe Knowledgebase — LIVE from <span className="text-green-600">knowledgebase</span>
+            🧠 VibesTribe Knowledgebase — LIVE DATA
           </h1>
-          <p className="text-sm text-gray-600">
-            {err ? <span className="text-red-600">Error: {err}</span> : <>Loaded <b>{items.length}</b> items.</>}
-          </p>
+          {loading && <p className="text-sm text-gray-600">Loading knowledgebase…</p>}
+          {err && <p className="text-sm text-red-600">Error: {err}</p>}
+          {!loading && !err && <p className="text-sm text-gray-600">Loaded <b>{items.length}</b> items.</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -84,11 +88,9 @@ export default function App() {
         </div>
       </header>
 
-      {!items.length && !err && <p className="text-gray-600">Loading…</p>}
-
       {!!filtered.length && (
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(item => (
+          {filtered.map((item) => (
             <article key={item.id} className="bg-white shadow rounded p-4">
               <h2 className="font-semibold text-lg mb-1">{item.title}</h2>
               {item.summary && <p className="text-sm text-gray-700 mb-2">{item.summary}</p>}
@@ -112,7 +114,7 @@ export default function App() {
         </section>
       )}
 
-      {items.length > 0 && filtered.length === 0 && (
+      {!loading && !err && items.length > 0 && filtered.length === 0 && (
         <p className="text-gray-600">No matches for your filters.</p>
       )}
     </main>

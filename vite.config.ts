@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: './'
+  base: '/kb-site/', // IMPORTANT: match your repo name
 });

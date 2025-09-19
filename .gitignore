@@ -4,6 +4,7 @@
 
 # build output
 /dist
+/docs
 
 # logs
 npm-debug.log*
@@ -14,4 +15,3 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# keep docs tracked (don’t ignore it!)

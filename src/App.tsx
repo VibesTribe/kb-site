@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   ExternalLink,
   Folder,
   Moon,
+  RefreshCw,
   Sun
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ const KB_URL =
   "https://cdn.jsdelivr.net/gh/VibesTribe/knowledgebase@main/knowledge.json";
 
 const DARK_MODE_KEY = "kb-site:dark-mode";
+const AUTO_REFRESH_INTERVAL_MS = 1000 * 60 * 60 * 12; // 12 hours
 
 const COLLECTION_LABELS: Record<string, string> = {
   vibeflow: "Vibeflow",
@@ -82,6 +84,8 @@ export default function App() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedCollection, setSelectedCollection] = useState("All");
   const [darkMode, setDarkMode] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(DARK_MODE_KEY);
@@ -92,13 +96,22 @@ export default function App() {
     localStorage.setItem(DARK_MODE_KEY, String(darkMode));
   }, [darkMode]);
 
+  const handleRefresh = useCallback(() => {
+    setReloadToken((token) => token + 1);
+  }, []);
+
   useEffect(() => {
+    const controller = new AbortController();
     let canceled = false;
+
     (async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(KB_URL, { cache: "no-store" });
+        const response = await fetch(KB_URL, {
+          cache: "no-store",
+          signal: controller.signal
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const collection = Array.isArray(data)
@@ -114,17 +127,30 @@ export default function App() {
               ? entry.tags.filter((tag) => typeof tag === "string" && tag.trim())
               : []
           }));
-        if (!canceled) setItems(cleaned);
+        if (!canceled) {
+          setItems(cleaned);
+          setLastUpdated(new Date());
+        }
       } catch (err: any) {
+        if (controller.signal.aborted || canceled) return;
         if (!canceled) setError(err?.message ?? "Failed to load knowledgebase");
       } finally {
         if (!canceled) setLoading(false);
       }
     })();
+
     return () => {
       canceled = true;
+      controller.abort();
     };
-  }, []);
+  }, [reloadToken]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      handleRefresh();
+    }, AUTO_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [handleRefresh]);
 
   const availableTags = useMemo(() => getTags(items), [items]);
   const availableCollections = useMemo(() => getCollections(items), [items]);
@@ -176,9 +202,19 @@ export default function App() {
     ? "flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/70 bg-gray-900/70 text-cyan-300 transition hover:scale-110"
     : "flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-600 shadow-sm transition hover:scale-110";
 
+  const refreshClasses = darkMode
+    ? "flex h-10 w-10 items-center justify-center rounded-full border border-gray-700 bg-gray-900/70 text-gray-300 transition hover:scale-105 disabled:opacity-70"
+    : "flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:scale-105 disabled:opacity-70";
+
   const statusClasses = darkMode
     ? "text-sm md:text-base text-gray-300"
     : "text-sm md:text-base text-gray-600";
+
+  const timestampClasses = darkMode
+    ? "mt-1 block text-xs text-cyan-200 md:ml-2 md:inline md:mt-0"
+    : "mt-1 block text-xs text-gray-500 md:ml-2 md:inline md:mt-0";
+
+  const refreshIconClasses = loading ? "h-4 w-4 animate-spin" : "h-4 w-4";
 
   return (
     <div className={`${pageClasses} p-6 md:p-10`}>
@@ -191,9 +227,19 @@ export default function App() {
             {error ? (
               <span className="text-red-500">Error: {error}</span>
             ) : loading ? (
-              "Loading bookmarks…"
+              "Loading bookmarks..."
             ) : (
-              <>Loaded <b>{items.length}</b> bookmarks.</>
+              <>
+                Loaded <b>{items.length}</b> bookmarks.
+                {lastUpdated && (
+                  <span className={timestampClasses}>
+                    Updated {lastUpdated.toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit"
+                    })}
+                  </span>
+                )}
+              </>
             )}
           </p>
         </div>
@@ -201,10 +247,20 @@ export default function App() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search bookmarks…"
+            placeholder="Search bookmarks"
             className={inputClasses}
             aria-label="Search bookmarks"
           />
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className={refreshClasses}
+            aria-label="Refresh bookmarks"
+            title="Refresh bookmarks"
+            disabled={loading}
+          >
+            <RefreshCw className={refreshIconClasses} />
+          </button>
           <button
             type="button"
             onClick={() => setDarkMode((prev) => !prev)}
@@ -292,7 +348,7 @@ export default function App() {
               : "text-sm text-gray-500 animate-pulse-slow"
           }
         >
-          Syncing fresh knowledge…
+          Syncing fresh knowledge...
         </div>
       )}
 
